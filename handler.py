@@ -228,7 +228,7 @@ if __name__ == "__main__":
         mock_successful_response.status_code = 201
         mock_requests_put.return_value = mock_successful_response
 
-        test_event = {"input": {"video_url": "http://example.com/video_bunny_success.mp4"}}
+        test_event = {"input": {"video_url": "https://zockto.b-cdn.net/videos/230abf25-6281-49df-b4ad-7f9744d73a62.mp4"}}
         result = handler(test_event)
 
         print(f"Handler result for test_successful_upload_to_bunnycdn: {result}")
