@@ -38,3 +38,5 @@ RUN pip install --upgrade pip && \
 # Expose the port RunPod expects (if necessary, though usually handled by RunPod)
 # CMD line will be provided by RunPod when creating the serverless endpoint,
 # typically to run the handler script (e.g., python -u handler.py)
+
+CMD ["python", "-u", "handler.py"]
