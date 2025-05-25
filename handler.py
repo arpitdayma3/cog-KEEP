@@ -117,7 +117,7 @@ def handler(event):
             # Simulate cog.Path for the input, as predict.py expects it.
             # A simple mock or using pathlib.Path might be needed if predict.py uses Path methods.
             # For now, let's assume string path is fine, if not, this is where adjustment is needed.
-            # The `predict.py` uses `str(input_video)` early on, so a string should be fine.
+            # The `predict.py` uses `str(input_video)` early on, so a string should be fine. 
             output_video_path_obj = predictor.predict(
                 input_video=local_video_path, # Pass string directly
                 draw_box=draw_box,
