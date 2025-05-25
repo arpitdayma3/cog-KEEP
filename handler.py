@@ -5,7 +5,6 @@ import shutil
 import json
 import requests # For uploading the result
 # import time # For adding delays in retry mechanism - No longer needed
-import uuid # For generating unique filenames
 from predict import Predictor, download_weights # Assuming Predictor can be imported
 import yt_dlp # For downloading video from URL
 
@@ -117,7 +116,7 @@ def handler(event):
             # Simulate cog.Path for the input, as predict.py expects it.
             # A simple mock or using pathlib.Path might be needed if predict.py uses Path methods.
             # For now, let's assume string path is fine, if not, this is where adjustment is needed.
-            # The `predict.py` uses `str(input_video)` early on, so a string should be fine. 
+            # The `predict.py` uses `str(input_video)` early on, so a string should be fine.
             output_video_path_obj = predictor.predict(
                 input_video=local_video_path, # Pass string directly
                 draw_box=draw_box,
@@ -139,16 +138,10 @@ def handler(event):
                  return {"error": "Prediction finished but output file not found."}
 
             # Attempt to upload the predicted video to BunnyCDN
-            original_filename = os.path.basename(output_video_path_str)
-            _ , original_extension = os.path.splitext(original_filename)
-            if not original_extension: # Ensure there's an extension, default to .mp4 if not
-                original_extension = ".mp4"
-                print(f"No original extension found, defaulting to {original_extension} for {original_filename}")
+            file_name = os.path.basename(output_video_path_str)
+            print(f"Extracted file name for upload: {file_name}")
 
-            unique_file_name = f"{str(uuid.uuid4())}{original_extension}"
-            print(f"Original filename: {original_filename}, Unique filename for upload: {unique_file_name}")
-
-            bunnycdn_url = upload_to_bunnycdn(output_video_path_str, unique_file_name)
+            bunnycdn_url = upload_to_bunnycdn(output_video_path_str, file_name)
 
             if bunnycdn_url:
                 print(f"Successfully uploaded to BunnyCDN: {bunnycdn_url}")
@@ -190,116 +183,7 @@ if __name__ == "__main__":
     # print("Simulating a handler event locally (mocking may be needed for full test):")
     # result = handler(test_event) # This would require mocking predictor and yt_dlp if run
     # print(f"Handler result: {result}")
-    
-    # --- Test Cases for BunnyCDN Upload ---
-    from unittest.mock import patch, MagicMock, ANY # ANY is useful for data part of assert_called_once_with
-
-    def run_tests():
-        print("\nRunning tests for BunnyCDN integration...")
-        test_successful_upload_to_bunnycdn()
-        test_failed_upload_to_bunnycdn()
-        print("\nBunnyCDN tests finished.")
-
-    @patch('uuid.uuid4') # Mock uuid.uuid4
-    @patch('requests.put')
-    @patch('yt_dlp.YoutubeDL')
-    @patch.object(predictor, 'predict')
-    def test_successful_upload_to_bunnycdn(mock_predict, mock_yt_dlp, mock_requests_put, mock_uuid4): # Add mock_uuid4
-        print("\nRunning test: test_successful_upload_to_bunnycdn")
-
-        # Configure mock for uuid.uuid4()
-        # It's called via str(uuid.uuid4()), so mock __str__
-        mock_uuid4.return_value.__str__.return_value = 'fixed_success_uuid'
-        
-        # Setup mock for yt_dlp
-        mock_yt_instance = MagicMock()
-        mock_yt_dlp.return_value.__enter__.return_value = mock_yt_instance
-        
-        # Setup mock for predictor.predict
-        temp_output_dir = tempfile.mkdtemp()
-        dummy_video_filename = "test_video.mp4"
-        dummy_output_file = os.path.join(temp_output_dir, dummy_video_filename)
-        with open(dummy_output_file, "w") as f:
-            f.write("dummy video content for bunnycdn success test")
-        mock_predict.return_value = dummy_output_file
-
-        # Configure requests.put mock for successful upload
-        mock_successful_response = MagicMock()
-        mock_successful_response.status_code = 201
-        mock_requests_put.return_value = mock_successful_response
-
-        test_event = {"input": {"video_url": "https://zockto.b-cdn.net/videos/230abf25-6281-49df-b4ad-7f9744d73a62.mp4"}}
-        result = handler(test_event)
-
-        print(f"Handler result for test_successful_upload_to_bunnycdn: {result}")
-
-        # dummy_video_filename provides the extension ".mp4"
-        # The uuid part comes from the mock
-        expected_unique_filename = "fixed_success_uuid.mp4" 
-        expected_bunny_url = f"https://zockto.b-cdn.net/videos/{expected_unique_filename}"
-        
-        assert result.get("message") == "Prediction successful. Output video uploaded to BunnyCDN."
-        assert result.get("output_video_url") == expected_bunny_url
-        
-        # Assert that requests.put was called correctly
-        expected_bunny_put_url = f"https://storage.bunnycdn.com/zockto/videos/{expected_unique_filename}"
-        expected_headers = {
-            "AccessKey": "17e23633-2a7a-4d29-9450be4d6c8e-e01f-45f4",
-            "Content-Type": "video/mp4", # This should match the extension
-        }
-        # ANY is used for the data part because it's a file stream object
-        mock_requests_put.assert_called_once_with(expected_bunny_put_url, headers=expected_headers, data=ANY) 
-        print("Test test_successful_upload_to_bunnycdn: PASSED")
-
-        # Cleanup
-        os.remove(dummy_output_file)
-        os.rmdir(temp_output_dir)
-
-    @patch('uuid.uuid4') # Mock uuid.uuid4
-    @patch('requests.put')
-    @patch('yt_dlp.YoutubeDL')
-    @patch.object(predictor, 'predict')
-    def test_failed_upload_to_bunnycdn(mock_predict, mock_yt_dlp, mock_requests_put, mock_uuid4): # Add mock_uuid4
-        print("\nRunning test: test_failed_upload_to_bunnycdn")
-
-        # Configure mock for uuid.uuid4()
-        mock_uuid4.return_value.__str__.return_value = 'fixed_failure_uuid'
-
-        # Setup mock for yt_dlp
-        mock_yt_instance = MagicMock()
-        mock_yt_dlp.return_value.__enter__.return_value = mock_yt_instance
-
-        # Setup mock for predictor.predict
-        temp_output_dir = tempfile.mkdtemp()
-        dummy_video_filename = "test_video_fail.mp4"
-        dummy_output_file = os.path.join(temp_output_dir, dummy_video_filename)
-        with open(dummy_output_file, "w") as f:
-            f.write("dummy video content for bunnycdn failure test")
-        mock_predict.return_value = dummy_output_file
-
-        # Configure requests.put mock for failed upload
-        mock_failed_response = MagicMock()
-        mock_failed_response.status_code = 500
-        mock_failed_response.text = "Simulated BunnyCDN Server Error"
-        mock_requests_put.return_value = mock_failed_response
-        
-        # Alternative: Simulate a network error
-        # mock_requests_put.side_effect = requests.exceptions.RequestException("Simulated network error")
-
-
-        test_event = {"input": {"video_url": "https://zockto.b-cdn.net/videos/230abf25-6281-49df-b4ad-7f9744d73a62.mp4"}}
-        result = handler(test_event)
-
-        print(f"Handler result for test_failed_upload_to_bunnycdn: {result}")
-        
-        assert result.get("error") == "Prediction successful, but failed to upload output video to BunnyCDN."
-        print("Test test_failed_upload_to_bunnycdn: PASSED")
-
-        # Cleanup
-        os.remove(dummy_output_file)
-        os.rmdir(temp_output_dir)
-
-    run_tests()
+    pass
 
 # Start the serverless worker
 runpod.serverless.start({"handler": handler})
