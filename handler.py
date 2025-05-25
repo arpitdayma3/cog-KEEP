@@ -4,6 +4,8 @@ import tempfile
 import shutil
 import json
 import requests # For uploading the result
+import uuid
+import time
 # import time # For adding delays in retry mechanism - No longer needed
 from predict import Predictor, download_weights # Assuming Predictor can be imported
 import yt_dlp # For downloading video from URL
@@ -16,6 +18,32 @@ predictor.setup() # Explicitly call setup
 print("Predictor initialized.")
 
 # upload_to_fileio and upload_to_tempsh functions have been removed.
+
+def generate_unique_filename(original_filename=None):
+    """
+    Generates a unique filename using UUID and timestamp.
+    
+    Args:
+        original_filename (str, optional): Original filename to extract extension from
+        
+    Returns:
+        str: Unique filename with .mp4 extension
+    """
+    # Generate unique identifier using UUID and timestamp
+    unique_id = str(uuid.uuid4())[:8]  # First 8 characters of UUID
+    timestamp = str(int(time.time()))  # Unix timestamp
+    
+    # Extract extension from original filename if provided, otherwise default to .mp4
+    if original_filename:
+        _, ext = os.path.splitext(original_filename)
+        if not ext:
+            ext = '.mp4'
+    else:
+        ext = '.mp4'
+    
+    # Create unique filename: restored_video_{timestamp}_{uuid}.mp4
+    unique_filename = f"restored_video_{timestamp}_{unique_id}{ext}"
+    return unique_filename
 
 def upload_to_bunnycdn(file_path, file_name):
     """
@@ -137,17 +165,19 @@ def handler(event):
             if not os.path.exists(output_video_path_str):
                  return {"error": "Prediction finished but output file not found."}
 
-            # Attempt to upload the predicted video to BunnyCDN
-            file_name = os.path.basename(output_video_path_str)
-            print(f"Extracted file name for upload: {file_name}")
+            # Generate unique filename instead of using the original filename
+            original_filename = os.path.basename(output_video_path_str)
+            unique_filename = generate_unique_filename(original_filename)
+            print(f"Generated unique filename: {unique_filename}")
 
-            bunnycdn_url = upload_to_bunnycdn(output_video_path_str, file_name)
+            bunnycdn_url = upload_to_bunnycdn(output_video_path_str, unique_filename)
 
             if bunnycdn_url:
                 print(f"Successfully uploaded to BunnyCDN: {bunnycdn_url}")
                 return {
                     "message": "Prediction successful. Output video uploaded to BunnyCDN.",
-                    "output_video_url": bunnycdn_url
+                    "output_video_url": bunnycdn_url,
+                    "filename": unique_filename
                 }
             else:
                 print(f"Prediction successful, but BunnyCDN upload failed for {output_video_path_str}.")
